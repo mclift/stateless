@@ -35,18 +35,40 @@ namespace Stateless.Graph
             }
 
             stateRepresentationString = "\n"
-                + $"subgraph cluster{stateInfo.NodeName}" + "\n"
+                + $"subgraph {GetClusterName(stateInfo)}" + "\n"
                 + "\t{" + "\n"
                 + $"\tlabel = \"{label.ToString()}\"" + "\n";
 
             foreach (var subState in stateInfo.SubStates)
             {
-                stateRepresentationString += FormatOneState(subState);
+                stateRepresentationString += FormatState(subState);
             }
 
             stateRepresentationString += "}\n";
 
             return stateRepresentationString;
+        }
+
+        private static string GetClusterName(State state)
+        {
+            return $"cluster{state.NodeName}";
+        }
+
+        /// <summary>
+        /// Generate the text for the state or superstate.
+        /// </summary>
+        /// <param name="state">The state or superstate.</param>
+        /// <returns></returns>
+        public override string FormatState(State state)
+        {
+            if (state is SuperState superState)
+            {
+                return FormatOneCluster(superState);
+            }
+            else
+            {
+                return FormatOneState(state);
+            }
         }
 
         /// <summary>
@@ -75,13 +97,14 @@ namespace Stateless.Graph
         /// <summary>
         /// Generate text for a single transition
         /// </summary>
-        /// <param name="sourceNodeName"></param>
+        /// <param name="sourceNode"></param>
         /// <param name="trigger"></param>
         /// <param name="actions"></param>
-        /// <param name="destinationNodeName"></param>
+        /// <param name="destinationNode"></param>
         /// <param name="guards"></param>
         /// <returns></returns>
-        override internal string FormatOneTransition(string sourceNodeName, string trigger, IEnumerable<string> actions, string destinationNodeName, IEnumerable<string> guards)
+        override internal string FormatOneTransition(State sourceNode, string trigger, IEnumerable<string> actions,
+            State destinationNode, IEnumerable<string> guards)
         {
             string label = trigger ?? "";
 
@@ -98,7 +121,42 @@ namespace Stateless.Graph
                 }
             }
 
-            return FormatOneLine(sourceNodeName, destinationNodeName, label);
+            var sourceNodeName = GetConnectedNodeName(sourceNode, out var tailNodeName);
+            var destinationNodeName = GetConnectedNodeName(destinationNode, out var headNodeName);
+
+            return FormatOneLine(sourceNodeName, destinationNodeName, label, tailNodeName, headNodeName);
+        }
+
+        /// <summary>
+        /// Gets a node name that can be used to attach a transition; outputs the name of the cluster
+        /// (if any) to which the transition should be connected in the DOT graph.
+        /// </summary>
+        /// <remarks>
+        /// This methods is used to avoid parent states from being drawn as separate entities in generated
+        /// state diagrams when one or more transitions have the parent state as an endpoint. This method
+        /// checks whether the connected state is a parent, and returns one of its immediate child state
+        /// names if so; additionally, it outputs the DOT graph cluster name that the drawn transition
+        /// should be attached to by using the "ltail" or "lhead" attribute. If the state is not a parent,
+        /// the <code>NodeName</code> is returned, and the cluster name is output as <code>null</code>.
+        /// </remarks>
+        /// <param name="state">The endpoint state.</param>
+        /// <param name="connectedClusterName">When connecting a parent state, the state's cluster name; otherwise, null.</param>
+        /// <returns>When connecting a parent state, one of the immediate child state names; otherwise, the state name.</returns>
+        private static string GetConnectedNodeName(State state, out string connectedClusterName)
+        {
+            string nodeName;
+            connectedClusterName = null;
+            if (state is SuperState superState)
+            {
+                nodeName = superState.LastChild?.NodeName ?? superState.NodeName;
+                connectedClusterName = GetClusterName(superState);
+            }
+            else
+            {
+                nodeName = state.NodeName;
+            }
+
+            return nodeName;
         }
 
         /// <summary>
@@ -112,9 +170,12 @@ namespace Stateless.Graph
             return nodeName + " [shape = \"diamond\", label = \"" + label + "\"];\n";
         }
 
-        internal string FormatOneLine(string fromNodeName, string toNodeName, string label)
+        internal string FormatOneLine(string fromNodeName, string toNodeName, string label, string tailNodeName = null, string headNodeName = null)
         {
-            return fromNodeName + " -> " + toNodeName + " " + "[style=\"solid\", label=\"" + label + "\"];";
+            var tailExpression = tailNodeName != null ? $", ltail={tailNodeName}" : "";
+            var headExpression = headNodeName != null ? $", lhead={headNodeName}" : "";
+
+            return $"{fromNodeName} -> {toNodeName} [style=\"solid\", label=\"{label}\"{tailExpression}{headExpression}];";
         }
     }
 }

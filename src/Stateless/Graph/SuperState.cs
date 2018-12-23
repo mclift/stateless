@@ -12,6 +12,11 @@ namespace Stateless.Graph
         /// </summary>
         public List<State> SubStates { get; } = new List<State>();
 
+        /// <summary>
+        /// Gets or sets the last non-superstate child of this superstate.
+        /// </summary>
+        public State LastChild { get; set; }
+
         internal SuperState(Reflection.StateInfo stateInfo)
             : base(stateInfo)
         {

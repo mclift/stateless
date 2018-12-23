@@ -19,6 +19,13 @@ namespace Stateless.Graph
         abstract internal string GetPrefix();
 
         /// <summary>
+        /// Generates formatted text for a state.
+        /// </summary>
+        /// <param name="state">The state or superstate.</param>
+        /// <returns>Description of the state in the desired format.</returns>
+        public abstract string FormatState(State state);
+
+        /// <summary>
         /// Returns the formatted text for a single state.
         /// For example, for DOT files this would be the description of a single node:
         /// nodename [label="statename"];
@@ -66,37 +73,37 @@ namespace Stateless.Graph
                 {
                     if (!stay.ExecuteEntryExitActions)
                     {
-                        line = FormatOneTransition(stay.SourceState.NodeName, stay.Trigger.UnderlyingTrigger.ToString(),
-                            null, stay.SourceState.NodeName, stay.Guards.Select(x => x.Description));
+                        line = FormatOneTransition(stay.SourceState, stay.Trigger.UnderlyingTrigger.ToString(),
+                            null, stay.SourceState, stay.Guards.Select(x => x.Description));
                     }
                     else if (stay.SourceState.EntryActions.Count == 0)
                     {
-                        line = FormatOneTransition(stay.SourceState.NodeName, stay.Trigger.UnderlyingTrigger.ToString(),
-                            null, stay.SourceState.NodeName, stay.Guards.Select(x => x.Description));
+                        line = FormatOneTransition(stay.SourceState, stay.Trigger.UnderlyingTrigger.ToString(),
+                            null, stay.SourceState, stay.Guards.Select(x => x.Description));
                     }
                     else
                     {
                         // There are entry functions into the state, so call out that this transition
                         // does invoke them (since normally a transition back into the same state doesn't)
-                        line = FormatOneTransition(stay.SourceState.NodeName, stay.Trigger.UnderlyingTrigger.ToString(),
-                            stay.SourceState.EntryActions, stay.SourceState.NodeName, stay.Guards.Select(x => x.Description));
+                        line = FormatOneTransition(stay.SourceState, stay.Trigger.UnderlyingTrigger.ToString(),
+                            stay.SourceState.EntryActions, stay.SourceState, stay.Guards.Select(x => x.Description));
                     }
                 }
                 else
                 {
                     if (transit is FixedTransition fix)
                     {
-                        line = FormatOneTransition(fix.SourceState.NodeName, fix.Trigger.UnderlyingTrigger.ToString(),
+                        line = FormatOneTransition(fix.SourceState, fix.Trigger.UnderlyingTrigger.ToString(),
                             fix.DestinationEntryActions.Select(x => x.Method.Description),
-                            fix.DestinationState.NodeName, fix.Guards.Select(x => x.Description));
+                            fix.DestinationState, fix.Guards.Select(x => x.Description));
                     }
                     else
                     {
                         if (transit is DynamicTransition dyn)
                         {
-                            line = FormatOneTransition(dyn.SourceState.NodeName, dyn.Trigger.UnderlyingTrigger.ToString(),
+                            line = FormatOneTransition(dyn.SourceState, dyn.Trigger.UnderlyingTrigger.ToString(),
                                 dyn.DestinationEntryActions.Select(x => x.Method.Description),
-                                dyn.DestinationState.NodeName, new List<string> { dyn.Criterion });
+                                dyn.DestinationState, new List<string> { dyn.Criterion });
                         }
                         else
                             throw new ArgumentException("Unexpected transition type");
@@ -113,13 +120,14 @@ namespace Stateless.Graph
         /// Returns the formatted text for a single transition.  Only required if the default version of
         /// FormatAllTransitions() is used.
         /// </summary>
-        /// <param name="sourceNodeName">Node name of the source state node</param>
+        /// <param name="sourceNode">Node name of the source state node</param>
         /// <param name="trigger">Name of the trigger</param>
         /// <param name="actions">List of entry and exit actions (if any)</param>
-        /// <param name="destinationNodeName"></param>
+        /// <param name="destinationNode"></param>
         /// <param name="guards">List of guards (if any)</param>
         /// <returns></returns>
-        virtual internal string FormatOneTransition(string sourceNodeName, string trigger, IEnumerable<string> actions, string destinationNodeName, IEnumerable<string> guards)
+        virtual internal string FormatOneTransition(State sourceNode, string trigger, IEnumerable<string> actions,
+            State destinationNode, IEnumerable<string> guards)
         {
             throw new InvalidOperationException("If you use IGraphStyle.FormatAllTransitions() you must implement an override of FormatOneTransition()");
         }

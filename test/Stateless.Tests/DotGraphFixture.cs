@@ -96,6 +96,25 @@ namespace Stateless.Tests
             return s.Replace("\n", Environment.NewLine);
         }
 
+        string line(string from, string to, string label, string ltail, string lhead)
+        {
+            string s = "\n" + from + " -> " + to
+                       + " [style=\"solid\"";
+
+            if (label != null)
+                s += ", label=\"" + label + "\"";
+
+            if (ltail != null)
+                s += ", ltail=" + ltail;
+
+            if (lhead != null)
+                s += ", lhead=" + lhead;
+
+            s += "];";
+
+            return s.Replace("\n", Environment.NewLine);
+        }
+
         string subgraph(Style style, string graphName, string label, string contents)
         {
             if (style != Style.UML)
@@ -425,6 +444,171 @@ namespace Stateless.Tests
             string dotGraph = UmlDotGraph.Format(sm.GetInfo());
 #if WRITE_DOTS_TO_FOLDER
             System.IO.File.WriteAllText(DestinationFolder + "UmlWithSubstate.dot", dotGraph);
+#endif
+
+            Assert.Equal(expected, dotGraph);
+        }
+
+        [Fact]
+        public void UmlWithTransitionToSuperState()
+        {
+            var expected = prefix(Style.UML)
+                           + subgraph(Style.UML, "D", "D\\n----------\\nentry / EnterD",
+                               box(Style.UML, "B")
+                               + box(Style.UML, "C"))
+                           + box(Style.UML, "A", new List<string> { "EnterA" }, new List<string> { "ExitA" })
+                           + line("A", "B", "X") + line("A", "C", "Y", null, "clusterD")
+                           + suffix;
+
+            var sm = new StateMachine<State, Trigger>(State.A);
+
+            sm.Configure(State.A)
+                .Permit(Trigger.X, State.B)
+                .Permit(Trigger.Y, State.D)
+                .OnEntry(TestEntryAction, "EnterA")
+                .OnExit(TestEntryAction, "ExitA");
+
+            sm.Configure(State.B)
+                .SubstateOf(State.D);
+            sm.Configure(State.C)
+                .SubstateOf(State.D);
+            sm.Configure(State.D)
+                .OnEntry(TestEntryAction, "EnterD")
+                .InitialTransition(State.C);
+
+            string dotGraph = UmlDotGraph.Format(sm.GetInfo());
+#if WRITE_DOTS_TO_FOLDER
+            System.IO.File.WriteAllText(DestinationFolder + "UmlWithTransitionToSuperState.dot", dotGraph);
+#endif
+
+            Assert.Equal(expected, dotGraph);
+        }
+
+        [Fact]
+        public void UmlWithTransitionFromSuperState()
+        {
+            var expected = prefix(Style.UML)
+                           + subgraph(Style.UML, "D", "D\\n----------\\nentry / EnterD",
+                               box(Style.UML, "B")
+                               + box(Style.UML, "C"))
+                           + box(Style.UML, "A", new List<string> { "EnterA" }, new List<string> { "ExitA" })
+                           + line("A", "B", "X") + line("A", "C", "Y") + line("C", "A", "Z", "clusterD", null)
+                           + suffix;
+
+            var sm = new StateMachine<State, Trigger>(State.A);
+
+            sm.Configure(State.A)
+                .Permit(Trigger.X, State.B)
+                .Permit(Trigger.Y, State.C)
+                .OnEntry(TestEntryAction, "EnterA")
+                .OnExit(TestEntryAction, "ExitA");
+
+            sm.Configure(State.B)
+                .SubstateOf(State.D);
+            sm.Configure(State.C)
+                .SubstateOf(State.D);
+            sm.Configure(State.D)
+                .Permit(Trigger.Z, State.A)
+                .OnEntry(TestEntryAction, "EnterD");
+
+            string dotGraph = UmlDotGraph.Format(sm.GetInfo());
+#if WRITE_DOTS_TO_FOLDER
+            System.IO.File.WriteAllText(DestinationFolder + "UmlWithTransitionFromSuperState.dot", dotGraph);
+#endif
+
+            Assert.Equal(expected, dotGraph);
+        }
+
+        [Fact]
+        public void UmlWithTransitionBetweenSuperStates()
+        {
+            var expected = prefix(Style.UML)
+                           + subgraph(Style.UML, "A", "A",
+                               box(Style.UML, "B"))
+                           + subgraph(Style.UML, "C", "C",
+                               box(Style.UML, "D"))
+                           + line("B", "D", "X", "clusterA", "clusterC") + line("B", "D", "Y")
+                           + suffix;
+
+            var sm = new StateMachine<State, Trigger>(State.B);
+
+            sm.Configure(State.A)
+                .Permit(Trigger.X, State.C);
+            sm.Configure(State.B)
+                .SubstateOf(State.A)
+                .Permit(Trigger.Y, State.D);
+            sm.Configure(State.D)
+                .SubstateOf(State.C);
+
+            string dotGraph = UmlDotGraph.Format(sm.GetInfo());
+#if WRITE_DOTS_TO_FOLDER
+            System.IO.File.WriteAllText(DestinationFolder + "UmlWithTransitionBetweenSuperStates.dot", dotGraph);
+#endif
+
+            Assert.Equal(expected, dotGraph);
+        }
+
+        [Fact]
+        public void UmlWithMultipleLevelSubstates()
+        {
+            var expected = prefix(Style.UML)
+                           + subgraph(Style.UML, "B", "B",
+                               subgraph(Style.UML, "C", "C",
+                                   box(Style.UML, "D")))
+                           + box(Style.UML, "A")
+                           + line("A", "D", "X", null, "clusterB") + line("A", "D", "Y", null, "clusterC") + line("A", "D", "Z")
+                           + suffix;
+
+            var sm = new StateMachine<State, Trigger>(State.A);
+
+            sm.Configure(State.A)
+                .Permit(Trigger.X, State.B)
+                .Permit(Trigger.Y, State.C)
+                .Permit(Trigger.Z, State.D);
+            sm.Configure(State.C)
+                .SubstateOf(State.B);
+            sm.Configure(State.D)
+                .SubstateOf(State.C);
+
+            string dotGraph = UmlDotGraph.Format(sm.GetInfo());
+#if WRITE_DOTS_TO_FOLDER
+            System.IO.File.WriteAllText(DestinationFolder + "UmlWithMultipleLevelSubstates.dot", dotGraph);
+#endif
+
+            Assert.Equal(expected, dotGraph);
+        }
+
+        [Fact]
+        public void UmlWithMultipleSuperStates()
+        {
+            var expected = prefix(Style.UML)
+                           + subgraph(Style.UML, "B", "B",
+                               subgraph(Style.UML, "C", "C",
+                                   box(Style.UML, "D"))
+                               + subgraph(Style.UML, "E", "E",
+                                   box(Style.UML, "F")))
+                           + box(Style.UML, "A")
+                           + line("A", "F", "X", null, "clusterB") + line("A", "D", "Y", null, "clusterC") + line("A", "F", "Z", null, "clusterE")
+                           + suffix;
+
+            var sm = new StateMachine<State, Trigger>(State.A);
+
+            sm.Configure(State.A)
+                .Permit(Trigger.X, State.B)
+                .Permit(Trigger.Y, State.C)
+                .Permit(Trigger.Z, State.E);
+            sm.Configure(State.C)
+                .SubstateOf(State.B);
+            sm.Configure(State.D)
+                .SubstateOf(State.C);
+            sm.Configure(State.E)
+                .SubstateOf(State.B);
+            sm.Configure(State.F)
+                .SubstateOf(State.E);
+
+            string dotGraph = UmlDotGraph.Format(sm.GetInfo());
+#if WRITE_DOTS_TO_FOLDER
+            System.IO.File.WriteAllText(DestinationFolder + "UmlWithMultipleSuperStates.dot", dotGraph);
 #endif
 
             Assert.Equal(expected, dotGraph);

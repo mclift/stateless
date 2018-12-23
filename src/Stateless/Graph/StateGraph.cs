@@ -51,19 +51,26 @@ namespace Stateless.Graph
         {
             string dirgraphText = style.GetPrefix().Replace("\n", System.Environment.NewLine);
 
-            // Start with the clusters
-            foreach (var state in States.Values.Where(x => x is SuperState))
+            // Iterate over states without superstates.
+            foreach (var state in States.Values.Where(x => x.SuperState == null))
             {
-                dirgraphText += style.FormatOneCluster((SuperState)state).Replace("\n", System.Environment.NewLine);
+                dirgraphText += style.FormatState(state).Replace("\n", System.Environment.NewLine);
+                //dirgraphText += style.FormatOneCluster((SuperState)state).Replace("\n", System.Environment.NewLine);
             }
 
-            // Next process all non-cluster states
-            foreach (var state in States.Values)
-            {
-                if ((state is SuperState) || (state is Decision) || (state.SuperState != null))
-                    continue;
-                dirgraphText += style.FormatOneState(state).Replace("\n", System.Environment.NewLine);
-            }
+            //// Start with the clusters
+            //foreach (var state in States.Values.Where(x => x is SuperState))
+            //{
+            //    dirgraphText += style.FormatOneCluster((SuperState)state).Replace("\n", System.Environment.NewLine);
+            //}
+
+            //// Next process all non-cluster states
+            //foreach (var state in States.Values)
+            //{
+            //    if ((state is SuperState) || (state is Decision) || (state.SuperState != null))
+            //        continue;
+            //    dirgraphText += style.FormatOneState(state).Replace("\n", System.Environment.NewLine);
+            //}
 
             // Finally, add decision nodes
             foreach (var dec in Decisions)
@@ -199,12 +206,14 @@ namespace Stateless.Graph
             {
                 SuperState state = new SuperState(stateInfo);
                 States[stateInfo.UnderlyingState.ToString()] = state;
-                AddSubstates(state, stateInfo.Substates);
+                AddSubstates(state, stateInfo.Substates, out State lastChild);
+                state.LastChild = lastChild;
             }
         }
 
-        void AddSubstates(SuperState superState, IEnumerable<StateInfo> substates)
+        void AddSubstates(SuperState superState, IEnumerable<StateInfo> substates, out State lastChild)
         {
+            lastChild = null;
             foreach (var subState in substates)
             {
                 if (States.ContainsKey(subState.UnderlyingState.ToString()))
@@ -217,7 +226,8 @@ namespace Stateless.Graph
                     States[subState.UnderlyingState.ToString()] = sub;
                     superState.SubStates.Add(sub);
                     sub.SuperState = superState;
-                    AddSubstates(sub, subState.Substates);
+                    AddSubstates(sub, subState.Substates, out lastChild);
+                    sub.LastChild = lastChild;
                 }
                 else
                 {
@@ -225,6 +235,7 @@ namespace Stateless.Graph
                     States[subState.UnderlyingState.ToString()] = sub;
                     superState.SubStates.Add(sub);
                     sub.SuperState = superState;
+                    lastChild = sub;
                 }
             }
         }
