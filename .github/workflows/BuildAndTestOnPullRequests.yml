@@ -18,8 +18,75 @@ jobs:
     - name: Build Stateless solution
       run: dotnet build Stateless.sln --configuration Release --no-restore
       
-    - name: Test Stateless
-      run: dotnet test --no-restore --no-build --configuration Release
+    - name: Test Stateless with coverage
+      run: |
+        dotnet test --no-restore --no-build --configuration Release --collect:"XPlat Code Coverage" --results-directory ./coverage --logger "console;verbosity=normal"
+      
+    - name: Generate test summary and coverage
+      id: test-summary
+      run: |
+        # Get test results summary
+        $testOutput = dotnet test --no-restore --no-build --configuration Release --logger "console;verbosity=minimal" 2>&1
+        $testSummary = $testOutput | Select-String "Test Run" | Select-Object -Last 1
+        
+        # Get build configuration from environment or default
+        $buildConfig = if ($env:BUILD_CONFIGURATION) { $env:BUILD_CONFIGURATION } else { "Release" }
+        
+        # Get target frameworks from test project file
+        $testProjectPath = "./test/Stateless.Tests/Stateless.Tests.csproj"
+        if (Test-Path $testProjectPath) {
+          [xml]$testProject = Get-Content $testProjectPath
+          $targetFrameworks = $testProject.Project.PropertyGroup.TargetFrameworks
+          if (-not $targetFrameworks) {
+            $targetFrameworks = $testProject.Project.PropertyGroup.TargetFramework
+          }
+        } else {
+          $targetFrameworks = "Unknown"
+        }
+        
+        # Get coverage percentage
+        $coverageFile = Get-ChildItem -Path "./coverage" -Recurse -Filter "coverage.cobertura.xml" | Select-Object -First 1
+        $coveragePercentage = "N/A"
+        $badgeColor = "lightgrey"
+        
+        if ($coverageFile) {
+          [xml]$coverage = Get-Content $coverageFile.FullName
+          $lineRate = [double]$coverage.coverage.'line-rate'
+          $coveragePercentage = [math]::Round($lineRate * 100, 1)
+          
+          $badgeColor = if ($coveragePercentage -ge 90) { "brightgreen" } elseif ($coveragePercentage -ge 80) { "green" } elseif ($coveragePercentage -ge 70) { "yellow" } elseif ($coveragePercentage -ge 60) { "orange" } else { "red" }
+        }
+        
+        # Create summary
+        $summary = "## 🧪 Test Results`n`n"
+        $summary += "✅ **Tests:** $testSummary`n"
+        $summary += "📊 **Coverage:** $coveragePercentage%`n"
+        $summary += "🎯 **Target Frameworks:** $targetFrameworks`n"
+        $summary += "⚙️ **Configuration:** $buildConfig`n`n"
+        
+        if ($coveragePercentage -ne "N/A") {
+          $summary += "![Coverage](https://img.shields.io/badge/coverage-${coveragePercentage}%25-${badgeColor}?style=flat-square)"
+        }
+        
+        echo "summary<<EOF" >> $env:GITHUB_OUTPUT
+        echo "$summary" >> $env:GITHUB_OUTPUT
+        echo "EOF" >> $env:GITHUB_OUTPUT
+        echo "coverage_percentage=$coveragePercentage" >> $env:GITHUB_OUTPUT
+        echo "badge_color=$badgeColor" >> $env:GITHUB_OUTPUT
+      
+    - name: Comment PR with test summary
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const summary = `${{ steps.test-summary.outputs.summary }}`;
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: summary
+          });
       
     - name: Pack alpha version
       if: github.ref == 'refs/heads/dev' && github.event_name == 'push' && github.repository == 'dotnet-state-machine/stateless'
