@@ -22,12 +22,11 @@ jobs:
       id: test-summary
       run: ./scripts/run-tests-with-coverage.ps1
       
-    - name: Output test summary
+    - name: Output test summary as annotations
       run: |
-        echo "## Test Summary"
-        echo "${{ steps.test-summary.outputs.summary }}"
-        echo ""
-        echo "Coverage: ${{ steps.test-summary.outputs.coverage_percentage }}%"
+        echo "::notice::Test Results Summary"
+        echo "${{ steps.test-summary.outputs.summary }}" | ForEach-Object { echo "::notice::$($_)" }
+        echo "::notice::Coverage: ${{ steps.test-summary.outputs.coverage_percentage }}%"
       
     - name: Pack alpha version
       if: github.ref == 'refs/heads/dev' && github.event_name == 'push' && github.repository == 'dotnet-state-machine/stateless'
