@@ -18,9 +18,38 @@ jobs:
     - name: Build Stateless solution
       run: dotnet build Stateless.sln --configuration Release --no-restore
       
-    - name: Test Stateless
-      run: dotnet test --no-restore --no-build --configuration Release
+    - name: Test with coverage (xUnit, Cobertura)
+      run: |
+        dotnet test --configuration Release --collect:"XPlat Code Coverage" \
+          -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=Cobertura
       
+    - name: Install ReportGenerator
+      run: dotnet tool install -g dotnet-reportgenerator-globaltool
+      
+    - name: Generate coverage report
+      run: |
+        reportgenerator -reports:"**/coverage.cobertura.xml" -targetdir:"coveragereport" -reporttypes:"MarkdownSummaryGithub;Html;Badges"
+      
+    - name: Append coverage to job summary
+      if: always()
+      run: |
+        $SUMMARY_FILE = "${{ github.workspace }}/coveragereport/SummaryGithub.md"
+        if (Test-Path $SUMMARY_FILE) {
+          Get-Content $SUMMARY_FILE | Add-Content $env:GITHUB_STEP_SUMMARY
+        } else {
+          "Coverage summary not found at $SUMMARY_FILE" | Add-Content $env:GITHUB_STEP_SUMMARY
+        }
+      
+    - name: Upload coverage artifact
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-report
+        path: coveragereport
+        if-no-files-found: warn
+        retention-days: 7
+      
+
     - name: Pack alpha version
       if: github.ref == 'refs/heads/dev' && github.event_name == 'push' && github.repository == 'dotnet-state-machine/stateless'
       run: dotnet pack src\Stateless\Stateless.csproj --version-suffix dev-${{github.run_id}} --configuration Release
