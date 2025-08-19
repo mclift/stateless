@@ -19,9 +19,7 @@ jobs:
       run: dotnet build Stateless.sln --configuration Release --no-restore
       
     - name: Test with coverage (xUnit, Cobertura)
-      run: |
-        dotnet test --configuration Release --collect:"XPlat Code Coverage" \
-          -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=Cobertura
+      run: dotnet test --configuration Release --collect:"XPlat Code Coverage" -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=Cobertura
       
     - name: Install ReportGenerator
       run: dotnet tool install -g dotnet-reportgenerator-globaltool
