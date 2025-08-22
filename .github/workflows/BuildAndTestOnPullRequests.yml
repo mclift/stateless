@@ -21,6 +21,14 @@ jobs:
     - name: Test with coverage (xUnit, Cobertura)
       run: dotnet test --configuration Release --collect:"XPlat Code Coverage" -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=Cobertura
       
+    - name: Re-sign assemblies with full strong name
+      run: |
+        # Re-sign all built assemblies with the private key
+        $assemblies = Get-ChildItem -Path "src\Stateless\bin\Release" -Filter "*.dll" -Recurse
+        foreach ($assembly in $assemblies) {
+          sn -R $assembly.FullName ../../asset/Stateless.snk
+        }
+      
     - name: Install ReportGenerator
       run: dotnet tool install -g dotnet-reportgenerator-globaltool
       
@@ -46,7 +54,6 @@ jobs:
         path: coveragereport
         if-no-files-found: warn
         retention-days: 7
-      
 
     - name: Pack alpha version
       if: github.ref == 'refs/heads/dev' && github.event_name == 'push' && github.repository == 'dotnet-state-machine/stateless'
