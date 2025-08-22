@@ -18,11 +18,11 @@ jobs:
     - name: Build Stateless solution (signed for distribution)
       run: dotnet build Stateless.sln --configuration Release --no-restore
       
-    - name: Build for coverage analysis (unsigned, single target)
-      run: dotnet build src\Stateless\Stateless.csproj --configuration Release --no-restore -p:SignAssembly=false -p:TargetFramework=net8.0 -o src\Stateless\bin\Coverage
+    - name: Build for coverage analysis (public signed, single target)
+      run: dotnet build src\Stateless\Stateless.csproj --configuration Release --no-restore -p:PublicSign=true -p:TargetFramework=net8.0 -o src\Stateless\bin\Coverage
       
-    - name: Build test project for coverage (unsigned)
-      run: dotnet build test\Stateless.Tests\Stateless.Tests.csproj --configuration Release --no-restore -p:SignAssembly=false -p:TargetFramework=net8.0 -o test\Stateless.Tests\bin\Coverage
+    - name: Build test project for coverage (public signed)
+      run: dotnet build test\Stateless.Tests\Stateless.Tests.csproj --configuration Release --no-restore -p:PublicSign=true -p:TargetFramework=net8.0 -o test\Stateless.Tests\bin\Coverage
       
     - name: Test with coverage (xUnit, Cobertura)
       run: dotnet test test\Stateless.Tests\bin\Coverage\net8.0\Stateless.Tests.dll --configuration Release --collect:"XPlat Code Coverage" -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=Cobertura
