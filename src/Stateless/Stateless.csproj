@@ -14,7 +14,7 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <AssemblyOriginatorKeyFile>../../asset/Stateless.snk</AssemblyOriginatorKeyFile>
     <SignAssembly>true</SignAssembly>
-    <PublicSign>true</PublicSign>
+    <PublicSign Condition=" '$(OS)' != 'Windows_NT' ">true</PublicSign>
     <PackageIcon>Stateless.png</PackageIcon>
     <PackageProjectUrl>https://github.com/dotnet-state-machine/stateless</PackageProjectUrl>
     <GenerateAssemblyVersionAttribute>false</GenerateAssemblyVersionAttribute>

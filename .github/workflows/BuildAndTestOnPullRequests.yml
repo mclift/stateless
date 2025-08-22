@@ -15,21 +15,17 @@ jobs:
     - name: Install dependencies
       run: dotnet restore
       
-    - name: Build Stateless solution
+    - name: Build Stateless solution (signed for distribution)
       run: dotnet build Stateless.sln --configuration Release --no-restore
       
-    - name: Test with coverage (xUnit, Cobertura)
-      run: dotnet test --configuration Release --collect:"XPlat Code Coverage" -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=Cobertura
+    - name: Build for coverage analysis (unsigned, single target)
+      run: dotnet build src\Stateless\Stateless.csproj --configuration Release --no-restore -p:SignAssembly=false -p:TargetFramework=net8.0 -o src\Stateless\bin\Coverage
       
-    - name: Re-sign assemblies with full strong name
-      run: |
-        # Locate and sign all built assemblies
-        $assemblies = Get-ChildItem -Path "src\Stateless\bin\Release" -Filter "*.dll" -Recurse
-        foreach ($assembly in $assemblies) {
-          Write-Host "Signing: $($assembly.FullName)"
-          dotnet sn --re-sign $assembly.FullName ../../asset/Stateless.snk
-          Write-Host "Successfully signed: $($assembly.Name)"
-        }
+    - name: Build test project for coverage (unsigned)
+      run: dotnet build test\Stateless.Tests\Stateless.Tests.csproj --configuration Release --no-restore -p:SignAssembly=false -p:TargetFramework=net8.0 -o test\Stateless.Tests\bin\Coverage
+      
+    - name: Test with coverage (xUnit, Cobertura)
+      run: dotnet test test\Stateless.Tests\bin\Coverage\net8.0\Stateless.Tests.dll --configuration Release --collect:"XPlat Code Coverage" -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=Cobertura
       
     - name: Install ReportGenerator
       run: dotnet tool install -g dotnet-reportgenerator-globaltool
