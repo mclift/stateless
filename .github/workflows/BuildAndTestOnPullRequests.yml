@@ -23,10 +23,12 @@ jobs:
       
     - name: Re-sign assemblies with full strong name
       run: |
-        # Re-sign all built assemblies with the private key
+        # Locate and sign all built assemblies
         $assemblies = Get-ChildItem -Path "src\Stateless\bin\Release" -Filter "*.dll" -Recurse
         foreach ($assembly in $assemblies) {
-          sn -R $assembly.FullName ../../asset/Stateless.snk
+          Write-Host "Signing: $($assembly.FullName)"
+          dotnet sn --re-sign $assembly.FullName ../../asset/Stateless.snk
+          Write-Host "Successfully signed: $($assembly.Name)"
         }
       
     - name: Install ReportGenerator
