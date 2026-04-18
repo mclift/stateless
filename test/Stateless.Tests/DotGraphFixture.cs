@@ -169,6 +169,93 @@ namespace Stateless.Tests
         }
 
         [Fact]
+        public void TransitionLabelEscapesActionsAndGuards()
+        {
+            var style = new UmlDotGraphStyle();
+            var from = "\\from \"state\"";
+            var to = "\\to \"state\"";
+            var trigger = "\\trigger \"go\"";
+            var action = "\\action \"run\"";
+            var guard = "\\guard \"ok\"";
+            var label = $"{trigger} / {action} [{guard}] [second]";
+
+            var expected = $"\"{EscapeLabel(from)}\" -> \"{EscapeLabel(to)}\" [style=\"solid\", label=\"{EscapeLabel(label)}\"];";
+
+            Assert.Equal(expected, style.FormatOneTransition(from, trigger, new[] { action }, to, new[] { guard, "second" }));
+        }
+
+        [Fact]
+        public void TransitionWithNullTriggerFormatsOnlyGuardLabel()
+        {
+            var style = new UmlDotGraphStyle();
+
+            Assert.Equal(
+                "\"A\" -> \"B\" [style=\"solid\", label=\"[Ready]\"];",
+                style.FormatOneTransition("A", null, null, "B", new[] { "Ready" }));
+        }
+
+        [Fact]
+        public void TransitionWithEmptyActionsDoesNotAppendActionSeparator()
+        {
+            var style = new UmlDotGraphStyle();
+
+            Assert.Equal(
+                "\"A\" -> \"B\" [style=\"solid\", label=\"X [Ready]\"];",
+                style.FormatOneTransition("A", "X", Array.Empty<string>(), "B", new[] { "Ready" }));
+        }
+
+        [Fact]
+        public void TransitionWithMultipleActionsPreservesOrder()
+        {
+            var style = new UmlDotGraphStyle();
+
+            Assert.Equal(
+                "\"A\" -> \"B\" [style=\"solid\", label=\"X / First, Second\"];",
+                style.FormatOneTransition("A", "X", new[] { "First", "Second" }, "B", Array.Empty<string>()));
+        }
+
+        [Fact]
+        public void DecisionNodeEscapesNodeNameAndLabel()
+        {
+            var style = new UmlDotGraphStyle();
+            var nodeName = "\\node \"1\"";
+            var label = "\\choose \"next\"";
+
+            Assert.Equal(
+                $"\"{EscapeLabel(nodeName)}\" [shape = \"diamond\", label = \"{EscapeLabel(label)}\"];{Environment.NewLine}",
+                style.FormatOneDecisionNode(nodeName, label));
+        }
+
+        [Fact]
+        public void SubstateClusterEscapesSuperstateLabelAndActions()
+        {
+            var superState = "\\super \"D\"";
+            var subState = "\\sub \"B\"";
+            var entryAction = "\\entry \"D\"";
+            var exitAction = "\\exit \"D\"";
+            var initialTransition = Environment.NewLine
+                + " init [label=\"\", shape=point];" + Environment.NewLine
+                + $" init -> \"{EscapeLabel(subState)}\"[style = \"solid\"]" + Environment.NewLine
+                + "}";
+            var expected = Prefix(Style.UML)
+                + Subgraph(
+                    Style.UML,
+                    EscapeLabel(superState),
+                    $"{EscapeLabel(superState)}\\n----------\\nentry / {EscapeLabel(entryAction)}\\nexit / {EscapeLabel(exitAction)}",
+                    Box(Style.UML, EscapeLabel(subState)))
+                + initialTransition;
+
+            var sm = new StateMachine<string, string>(subState);
+            sm.Configure(superState)
+                .OnEntry(() => { }, entryAction)
+                .OnExit(() => { }, exitAction);
+            sm.Configure(subState)
+                .SubstateOf(superState);
+
+            Assert.Equal(expected, UmlDotGraph.Format(sm.GetInfo()));
+        }
+
+        [Fact]
         public void TwoSimpleTransitions()
         {
             var expected = Prefix(Style.UML) + Box(Style.UML, "A") + Box(Style.UML, "B") + Box(Style.UML, "C")

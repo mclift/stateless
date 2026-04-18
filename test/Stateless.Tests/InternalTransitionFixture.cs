@@ -288,6 +288,32 @@ namespace Stateless.Tests
 
             Assert.Equal(2, handled);
         }
+
+        [Fact]
+        public void InternalTransitionIf_DoesNotInvokeActionWhenGuardIsFalse()
+        {
+            var handled = false;
+            var unhandled = false;
+
+            var sm = new StateMachine<State, Trigger>(State.A);
+            sm.OnUnhandledTrigger((state, trigger, unmetGuards) =>
+            {
+                unhandled = true;
+                Assert.Equal(State.A, state);
+                Assert.Equal(Trigger.X, trigger);
+                Assert.Contains("closed guard", unmetGuards);
+            });
+
+            sm.Configure(State.A)
+                .InternalTransitionIf(Trigger.X, args => false, () => handled = true, "closed guard");
+
+            sm.Fire(Trigger.X);
+
+            Assert.False(handled);
+            Assert.True(unhandled);
+            Assert.Equal(State.A, sm.State);
+        }
+
         [Fact]
         public async Task AsyncHandlesNonAsyndActionAsync()
         {

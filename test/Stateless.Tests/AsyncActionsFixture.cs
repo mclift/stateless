@@ -119,6 +119,35 @@ namespace Stateless.Tests
         }
 
         [Fact]
+        public async Task FireAsync_DoesNotCompleteUntilAsyncEntryActionCompletes()
+        {
+            var sm = new StateMachine<State, Trigger>(State.A);
+            var entryStarted = new TaskCompletionSource<object>();
+            var allowEntryToComplete = new TaskCompletionSource<object>();
+
+            sm.Configure(State.A)
+              .Permit(Trigger.X, State.B);
+
+            sm.Configure(State.B)
+              .OnEntryAsync(async () =>
+              {
+                  entryStarted.SetResult(null);
+                  await allowEntryToComplete.Task.ConfigureAwait(false);
+              });
+
+            var fireTask = sm.FireAsync(Trigger.X);
+
+            await entryStarted.Task.ConfigureAwait(false);
+
+            Assert.False(fireTask.IsCompleted);
+
+            allowEntryToComplete.SetResult(null);
+            await fireTask.ConfigureAwait(false);
+
+            Assert.Equal(State.B, sm.State);
+        }
+
+        [Fact]
         public async Task CanFireAsyncEntryActionPermitIfAsync()
         {
             var sm = new StateMachine<State, Trigger>(State.A);
@@ -164,6 +193,33 @@ namespace Stateless.Tests
 
             Assert.Equal("foo", test); // Should await action
             Assert.Equal(State.B, sm.State); // Should transition to destination state
+        }
+
+        [Fact]
+        public async Task FireAsync_DoesNotCompleteUntilAsyncExitActionCompletes()
+        {
+            var sm = new StateMachine<State, Trigger>(State.A);
+            var exitStarted = new TaskCompletionSource<object>();
+            var allowExitToComplete = new TaskCompletionSource<object>();
+
+            sm.Configure(State.A)
+              .OnExitAsync(async () =>
+              {
+                  exitStarted.SetResult(null);
+                  await allowExitToComplete.Task.ConfigureAwait(false);
+              })
+              .Permit(Trigger.X, State.B);
+
+            var fireTask = sm.FireAsync(Trigger.X);
+
+            await exitStarted.Task.ConfigureAwait(false);
+
+            Assert.False(fireTask.IsCompleted);
+
+            allowExitToComplete.SetResult(null);
+            await fireTask.ConfigureAwait(false);
+
+            Assert.Equal(State.B, sm.State);
         }
 
         [Fact]
@@ -354,6 +410,30 @@ namespace Stateless.Tests
         }
 
         [Fact]
+        public async Task ActivateAsync_DoesNotCompleteUntilAsyncActionCompletes()
+        {
+            var sm = new StateMachine<State, Trigger>(State.A);
+            var activationStarted = new TaskCompletionSource<object>();
+            var allowActivationToComplete = new TaskCompletionSource<object>();
+
+            sm.Configure(State.A)
+              .OnActivateAsync(async () =>
+              {
+                  activationStarted.SetResult(null);
+                  await allowActivationToComplete.Task.ConfigureAwait(false);
+              });
+
+            var activateTask = sm.ActivateAsync();
+
+            await activationStarted.Task.ConfigureAwait(false);
+
+            Assert.False(activateTask.IsCompleted);
+
+            allowActivationToComplete.SetResult(null);
+            await activateTask.ConfigureAwait(false);
+        }
+
+        [Fact]
         public async Task WhenDeactivateAsync()
         {
             var sm = new StateMachine<State, Trigger>(State.A);
@@ -366,6 +446,31 @@ namespace Stateless.Tests
             await sm.DeactivateAsync().ConfigureAwait(false);
 
             Assert.Equal(true, deactivated); // Should await action
+        }
+
+        [Fact]
+        public async Task DeactivateAsync_DoesNotCompleteUntilAsyncActionCompletes()
+        {
+            var sm = new StateMachine<State, Trigger>(State.A);
+            var deactivationStarted = new TaskCompletionSource<object>();
+            var allowDeactivationToComplete = new TaskCompletionSource<object>();
+
+            sm.Configure(State.A)
+              .OnDeactivateAsync(async () =>
+              {
+                  deactivationStarted.SetResult(null);
+                  await allowDeactivationToComplete.Task.ConfigureAwait(false);
+              });
+
+            await sm.ActivateAsync().ConfigureAwait(false);
+            var deactivateTask = sm.DeactivateAsync();
+
+            await deactivationStarted.Task.ConfigureAwait(false);
+
+            Assert.False(deactivateTask.IsCompleted);
+
+            allowDeactivationToComplete.SetResult(null);
+            await deactivateTask.ConfigureAwait(false);
         }
 
         [Fact]

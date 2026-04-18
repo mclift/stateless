@@ -1,4 +1,7 @@
 ﻿using System.Text;
+using System;
+using System.Threading.Tasks;
+using Stateless.Reflection;
 using Xunit;
 
 namespace Stateless.Tests
@@ -63,6 +66,40 @@ namespace Stateless.Tests
             WriteToFile(nameof(SimpleTransition_LeftToRight), result);
 
             Assert.Equal(expected, result);
+        }
+
+        [Theory]
+        [InlineData(Graph.MermaidGraphDirection.RightToLeft, "RL")]
+        [InlineData(Graph.MermaidGraphDirection.TopToBottom, "TB")]
+        [InlineData(Graph.MermaidGraphDirection.BottomToTop, "BT")]
+        public void SimpleTransition_WithDirection_IncludesDirectionCode(Graph.MermaidGraphDirection direction, string directionCode)
+        {
+            var expected = new StringBuilder()
+                .AppendLine("stateDiagram-v2")
+                .AppendLine($"	direction {directionCode}")
+                .AppendLine("	A --> B : X")
+                .AppendLine("[*] --> A")
+                .ToString().TrimEnd();
+
+            var sm = new StateMachine<State, Trigger>(State.A);
+
+            sm.Configure(State.A)
+                .Permit(Trigger.X, State.B);
+
+            var result = Graph.MermaidGraph.Format(sm.GetInfo(), direction);
+
+            Assert.Equal(expected, result);
+        }
+
+        [Fact]
+        public void Format_WithUnsupportedDirection_ThrowsArgumentOutOfRangeException()
+        {
+            var sm = new StateMachine<State, Trigger>(State.A);
+
+            var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
+                Graph.MermaidGraph.Format(sm.GetInfo(), (Graph.MermaidGraphDirection)999));
+
+            Assert.Equal("direction", exception.ParamName);
         }
 
         [Fact]
@@ -200,6 +237,116 @@ namespace Stateless.Tests
         }
 
         [Fact]
+        public void DynamicTransitionWithPossibleDestinationStates()
+        {
+            var expected = new StringBuilder()
+                .AppendLine("stateDiagram-v2")
+                .AppendLine("	state Decision1 <<choice>>")
+                .AppendLine("	A --> Decision1 : X")
+                .AppendLine("	Decision1 --> B : X [ChoseB]")
+                .AppendLine("	Decision1 --> C : X [ChoseC]")
+                .AppendLine("[*] --> A")
+                .ToString().TrimEnd();
+
+            var sm = new StateMachine<State, Trigger>(State.A);
+            sm.Configure(State.A)
+                .PermitDynamic(Trigger.X, DestinationSelector, null, new DynamicStateInfos
+                {
+                    { State.B, "ChoseB" },
+                    { State.C, "ChoseC" }
+                });
+
+            sm.Configure(State.B);
+            sm.Configure(State.C);
+
+            var result = Graph.MermaidGraph.Format(sm.GetInfo());
+
+            Assert.Equal(expected, result);
+        }
+
+        [Fact]
+        public void DynamicAsyncTransitionWithPossibleDestinationStates()
+        {
+            var expected = new StringBuilder()
+                .AppendLine("stateDiagram-v2")
+                .AppendLine("	state Decision1 <<choice>>")
+                .AppendLine("	A --> Decision1 : X")
+                .AppendLine("	Decision1 --> B : X [ChoseB]")
+                .AppendLine("	Decision1 --> C : X [ChoseC]")
+                .AppendLine("[*] --> A")
+                .ToString().TrimEnd();
+
+            var sm = new StateMachine<State, Trigger>(State.A);
+            sm.Configure(State.A)
+                .PermitDynamicAsync(Trigger.X, () => Task.FromResult(DestinationSelector()), null, new DynamicStateInfos
+                {
+                    { State.B, "ChoseB" },
+                    { State.C, "ChoseC" }
+                });
+
+            sm.Configure(State.B);
+            sm.Configure(State.C);
+
+            var result = Graph.MermaidGraph.Format(sm.GetInfo());
+
+            Assert.Equal(expected, result);
+        }
+
+        [Fact]
+        public void DynamicAsyncTransitionWithGuardIncludesGuardDescription()
+        {
+            var expected = new StringBuilder()
+                .AppendLine("stateDiagram-v2")
+                .AppendLine("	state Decision1 <<choice>>")
+                .AppendLine("	A --> Decision1 : X [Allowed]")
+                .AppendLine("	Decision1 --> B : X [ChoseB]")
+                .AppendLine("[*] --> A")
+                .ToString().TrimEnd();
+
+            var sm = new StateMachine<State, Trigger>(State.A);
+            sm.Configure(State.A)
+                .PermitDynamicIfAsync(
+                    Trigger.X,
+                    () => Task.FromResult(DestinationSelector()),
+                    () => true,
+                    "Allowed",
+                    new DynamicStateInfos
+                    {
+                        { State.B, "ChoseB" }
+                    });
+
+            sm.Configure(State.B);
+
+            var result = Graph.MermaidGraph.Format(sm.GetInfo());
+
+            Assert.Equal(expected, result);
+        }
+
+        [Fact]
+        public void DynamicDecisionNodeDescriptionIsNotRenderedAsMermaidLabel()
+        {
+            var expected = new StringBuilder()
+                .AppendLine("stateDiagram-v2")
+                .AppendLine("	state Decision1 <<choice>>")
+                .AppendLine("	A --> Decision1 : X")
+                .AppendLine("[*] --> A")
+                .ToString().TrimEnd();
+
+            var sm = new StateMachine<State, Trigger>(State.A);
+            sm.Configure(State.A)
+                .PermitDynamic(
+                    Trigger.X,
+                    () => State.B,
+                    "InjectedLabel\nstate Injected <<choice>>");
+
+            var result = Graph.MermaidGraph.Format(sm.GetInfo());
+
+            Assert.Equal(expected, result);
+            Assert.DoesNotContain("InjectedLabel", result);
+            Assert.DoesNotContain("Injected <<choice>>", result);
+        }
+
+        [Fact]
         public void DestinationStateIsCalculatedBasedOnTriggerParameters()
         {
             var expected = new StringBuilder()
@@ -242,6 +389,47 @@ namespace Stateless.Tests
             var result = Graph.MermaidGraph.Format(sm.GetInfo());
 
             WriteToFile(nameof(TransitionWithIgnore), result);
+
+            Assert.Equal(expected, result);
+        }
+
+        [Fact]
+        public void ReentrantTransitionShowsDefaultEntryAction()
+        {
+            var expected = new StringBuilder()
+                .AppendLine("stateDiagram-v2")
+                .AppendLine("	A --> A : X / EnterA")
+                .AppendLine("[*] --> A")
+                .ToString().TrimEnd();
+
+            var sm = new StateMachine<State, Trigger>(State.A);
+
+            sm.Configure(State.A)
+                .OnEntry(TestEntryAction, "EnterA")
+                .PermitReentry(Trigger.X);
+
+            var result = Graph.MermaidGraph.Format(sm.GetInfo());
+
+            Assert.Equal(expected, result);
+        }
+
+        [Fact]
+        public void InternalTransitionDoesNotShowEntryOrExitActions()
+        {
+            var expected = new StringBuilder()
+                .AppendLine("stateDiagram-v2")
+                .AppendLine("	A --> A : X [Function]")
+                .AppendLine("[*] --> A")
+                .ToString().TrimEnd();
+
+            var sm = new StateMachine<State, Trigger>(State.A);
+
+            sm.Configure(State.A)
+                .OnEntry(TestEntryAction, "EnterA")
+                .OnExit(TestEntryAction, "ExitA")
+                .InternalTransition(Trigger.X, x => { });
+
+            var result = Graph.MermaidGraph.Format(sm.GetInfo());
 
             Assert.Equal(expected, result);
         }
@@ -361,6 +549,28 @@ namespace Stateless.Tests
         }
 
         [Fact]
+        public void StateNamesWithColonDashAndWhitespaceAreAliasedThroughoutGraph()
+        {
+            var expected = new StringBuilder()
+                .AppendLine("stateDiagram-v2")
+                .AppendLine("	ABC : A:B - C")
+                .AppendLine("	BCD : B:C-D")
+                .AppendLine("	ABC --> BCD : Go")
+                .AppendLine("[*] --> ABC")
+                .ToString().TrimEnd();
+
+            var sm = new StateMachine<string, string>("A:B - C");
+
+            sm.Configure("A:B - C")
+                .Permit("Go", "B:C-D");
+            sm.Configure("B:C-D");
+
+            var result = Graph.MermaidGraph.Format(sm.GetInfo());
+
+            Assert.Equal(expected, result);
+        }
+
+        [Fact]
         public void StateNamesWithSpacesAreAliased()
         {
             var expected = new StringBuilder()
@@ -387,6 +597,42 @@ namespace Stateless.Tests
             Assert.Equal(expected, result);
         }
 
+        [Fact]
+        public void StateNamesSanitizedToExistingStateNameAreUniquelyAliased()
+        {
+            var expected = new StringBuilder()
+                .AppendLine("stateDiagram-v2")
+                .AppendLine("	AB_1 : A-B")
+                .AppendLine("	AB_1 --> AB : Go")
+                .AppendLine("[*] --> AB_1")
+                .ToString().TrimEnd();
+
+            var sm = new StateMachine<string, string>("A-B");
+
+            sm.Configure("A-B").Permit("Go", "AB");
+            sm.Configure("AB");
+
+            var result = Graph.MermaidGraph.Format(sm.GetInfo());
+
+            Assert.Equal(expected, result);
+        }
+
+        [Fact]
+        public void MermaidGraphStyleGetPrefixCanBeCalledMoreThanOnce()
+        {
+            var sm = new StateMachine<string, string>("A A");
+            sm.Configure("A A").Permit("Go", "B");
+
+            var graph = new Graph.StateGraph(sm.GetInfo());
+            var style = new Graph.MermaidGraphStyle(graph, null);
+
+            var firstPrefix = style.GetPrefix();
+            var secondPrefix = style.GetPrefix();
+
+            Assert.Equal(firstPrefix, secondPrefix);
+            Assert.Contains("	AA : A A", secondPrefix);
+        }
+
         private bool IsTrue()
         {
             return true;
@@ -395,6 +641,8 @@ namespace Stateless.Tests
         private void TestEntryAction() { }
 
         private void TestEntryActionString(string val) { }
+
+        private State DestinationSelector() { return State.A; }
 
         private void WriteToFile(string fileName, string content)
         {

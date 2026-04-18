@@ -270,6 +270,54 @@ namespace Stateless.Tests
         }
 
         [Fact]
+        public async Task ParameterizedAsyncTriggerWithOneGuardArgument_CanTransition()
+        {
+            var sm = new StateMachine<State, Trigger>(State.A);
+            var trigger = sm.SetTriggerParameters<int>(Trigger.X);
+
+            sm.Configure(State.A)
+                .PermitIfAsync(trigger, State.B, value => Task.FromResult(value == 5), "value == 5");
+
+            Assert.Equal(1, (await sm.GetPermittedTriggersAsync(5)).Count());
+
+            await sm.FireAsync(trigger, 5);
+
+            Assert.Equal(State.B, sm.State);
+        }
+
+        [Fact]
+        public async Task ParameterizedAsyncTriggerWithTwoGuardArguments_CanTransition()
+        {
+            var sm = new StateMachine<State, Trigger>(State.A);
+            var trigger = sm.SetTriggerParameters<int, string>(Trigger.X);
+
+            sm.Configure(State.A)
+                .PermitIfAsync(trigger, State.B, (value, text) => Task.FromResult(value == 5 && text == "go"), "value == 5 && text == go");
+
+            Assert.Equal(1, (await sm.GetPermittedTriggersAsync(5, "go")).Count());
+
+            await sm.FireAsync(trigger, 5, "go");
+
+            Assert.Equal(State.B, sm.State);
+        }
+
+        [Fact]
+        public async Task ParameterizedAsyncTriggerWithThreeGuardArguments_CanTransition()
+        {
+            var sm = new StateMachine<State, Trigger>(State.A);
+            var trigger = sm.SetTriggerParameters<int, string, bool>(Trigger.X);
+
+            sm.Configure(State.A)
+                .PermitIfAsync(trigger, State.B, (value, text, enabled) => Task.FromResult(value == 5 && text == "go" && enabled), "value == 5 && text == go && enabled");
+
+            Assert.Equal(1, (await sm.GetPermittedTriggersAsync(5, "go", true)).Count());
+
+            await sm.FireAsync(trigger, 5, "go", true);
+
+            Assert.Equal(State.B, sm.State);
+        }
+
+        [Fact]
         [Obsolete]
         public void AcceptedValidAsyncTriggersRespectGuardsLegacy()
         {

@@ -33,6 +33,31 @@ namespace Stateless.Tests
             Assert.True(guardInvoked);
             Assert.True(callbackInvoked);
         }
+
+        [Fact]
+        public async Task InternalTransitionAsync_AllowActionWithParameter()
+        {
+            var sm = new StateMachine<State, Trigger>(State.A);
+            var trigger = sm.SetTriggerParameters<int>(Trigger.X);
+            const int intParam = 5;
+            var callbackInvoked = false;
+
+            sm.Configure(State.A)
+                .InternalTransitionAsync(trigger, (i, transition) =>
+                {
+                    callbackInvoked = true;
+                    Assert.Equal(intParam, i);
+                    Assert.Equal(State.A, transition.Source);
+                    Assert.Equal(State.A, transition.Destination);
+                    Assert.Equal(Trigger.X, transition.Trigger);
+                    return Task.CompletedTask;
+                });
+
+            await sm.FireAsync(trigger, intParam);
+
+            Assert.True(callbackInvoked);
+            Assert.Equal(State.A, sm.State);
+        }
     
         [Fact]
         public async Task InternalTransitionAsyncIf_AllowGuardWithTwoParameters()
@@ -63,6 +88,33 @@ namespace Stateless.Tests
 
             Assert.True(guardInvoked);
             Assert.True(callbackInvoked);
+        }
+
+        [Fact]
+        public async Task InternalTransitionAsync_AllowActionWithTwoParameters()
+        {
+            var sm = new StateMachine<State, Trigger>(State.A);
+            var trigger = sm.SetTriggerParameters<int, string>(Trigger.X);
+            const int intParam = 5;
+            const string stringParam = "5";
+            var callbackInvoked = false;
+
+            sm.Configure(State.A)
+                .InternalTransitionAsync(trigger, (i, s, transition) =>
+                {
+                    callbackInvoked = true;
+                    Assert.Equal(intParam, i);
+                    Assert.Equal(stringParam, s);
+                    Assert.Equal(State.A, transition.Source);
+                    Assert.Equal(State.A, transition.Destination);
+                    Assert.Equal(Trigger.X, transition.Trigger);
+                    return Task.CompletedTask;
+                });
+
+            await sm.FireAsync(trigger, intParam, stringParam);
+
+            Assert.True(callbackInvoked);
+            Assert.Equal(State.A, sm.State);
         }
     
         [Fact]
@@ -97,6 +149,90 @@ namespace Stateless.Tests
 
             Assert.True(guardInvoked);
             Assert.True(callbackInvoked);
+        }
+
+        [Fact]
+        public async Task InternalTransitionAsync_AllowActionWithThreeParameters()
+        {
+            var sm = new StateMachine<State, Trigger>(State.A);
+            var trigger = sm.SetTriggerParameters<int, string, bool>(Trigger.X);
+            const int intParam = 5;
+            const string stringParam = "5";
+            const bool boolParam = true;
+            var callbackInvoked = false;
+
+            sm.Configure(State.A)
+                .InternalTransitionAsync(trigger, (i, s, b, transition) =>
+                {
+                    callbackInvoked = true;
+                    Assert.Equal(intParam, i);
+                    Assert.Equal(stringParam, s);
+                    Assert.Equal(boolParam, b);
+                    Assert.Equal(State.A, transition.Source);
+                    Assert.Equal(State.A, transition.Destination);
+                    Assert.Equal(Trigger.X, transition.Trigger);
+                    return Task.CompletedTask;
+                });
+
+            await sm.FireAsync(trigger, intParam, stringParam, boolParam);
+
+            Assert.True(callbackInvoked);
+            Assert.Equal(State.A, sm.State);
+        }
+
+        [Fact]
+        public async Task InternalTransitionAsync_DoesNotCompleteUntilActionTaskCompletes()
+        {
+            var sm = new StateMachine<State, Trigger>(State.A);
+            var actionStarted = new TaskCompletionSource<object>();
+            var allowActionToComplete = new TaskCompletionSource<object>();
+
+            sm.Configure(State.A)
+                .InternalTransitionAsync(Trigger.X, async () =>
+                {
+                    actionStarted.SetResult(null);
+                    await allowActionToComplete.Task.ConfigureAwait(false);
+                });
+
+            var fireTask = sm.FireAsync(Trigger.X);
+
+            await actionStarted.Task.ConfigureAwait(false);
+
+            Assert.False(fireTask.IsCompleted);
+
+            allowActionToComplete.SetResult(null);
+            await fireTask.ConfigureAwait(false);
+
+            Assert.Equal(State.A, sm.State);
+        }
+
+        [Fact]
+        public async Task InternalTransitionAsyncIf_DoesNotInvokeActionWhenGuardIsFalse()
+        {
+            var handled = false;
+            var unhandled = false;
+
+            var sm = new StateMachine<State, Trigger>(State.A);
+            sm.OnUnhandledTriggerAsync((state, trigger, unmetGuards) =>
+            {
+                unhandled = true;
+                Assert.Equal(State.A, state);
+                Assert.Equal(Trigger.X, trigger);
+                return Task.CompletedTask;
+            });
+
+            sm.Configure(State.A)
+                .InternalTransitionAsyncIf(Trigger.X, () => false, () =>
+                {
+                    handled = true;
+                    return Task.CompletedTask;
+                });
+
+            await sm.FireAsync(Trigger.X);
+
+            Assert.False(handled);
+            Assert.True(unhandled);
+            Assert.Equal(State.A, sm.State);
         }
 
         [Fact]

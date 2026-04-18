@@ -19,6 +19,33 @@ namespace Stateless.Tests
         }
 
         [Fact]
+        public async Task FireAsync_DoesNotCompleteUntilPermitDynamicAsyncDestinationSelectorCompletes()
+        {
+            var sm = new StateMachine<State, Trigger>(State.A);
+            var selectorStarted = new TaskCompletionSource<object>();
+            var allowSelectorToComplete = new TaskCompletionSource<State>();
+
+            sm.Configure(State.A)
+                .PermitDynamicAsync(Trigger.X, async () =>
+                {
+                    selectorStarted.SetResult(null);
+                    return await allowSelectorToComplete.Task.ConfigureAwait(false);
+                });
+
+            var fireTask = sm.FireAsync(Trigger.X);
+
+            await selectorStarted.Task.ConfigureAwait(false);
+
+            Assert.False(fireTask.IsCompleted);
+            Assert.Equal(State.A, sm.State);
+
+            allowSelectorToComplete.SetResult(State.B);
+            await fireTask.ConfigureAwait(false);
+
+            Assert.Equal(State.B, sm.State);
+        }
+
+        [Fact]
         public async Task PermitDynamic_With_TriggerParameter_Selects_Expected_State_Async()
         {
             var sm = new StateMachine<State, Trigger>(State.A);

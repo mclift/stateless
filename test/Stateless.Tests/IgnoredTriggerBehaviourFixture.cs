@@ -25,6 +25,17 @@ namespace Stateless.Tests
             Assert.Equal(Trigger.X, ignored.Trigger);
         }
 
+        [Fact]
+        public void NullGuardIsTreatedAsAlwaysMet()
+        {
+            var ignored = new StateMachine<State, Trigger>.IgnoredTriggerBehaviour(
+                Trigger.X, null);
+
+            Assert.True(ignored.GuardConditionsMet("ignored"));
+            Assert.Empty(ignored.Guards);
+            Assert.Empty(ignored.UnmetGuardConditions(new object[] { "ignored" }));
+        }
+
         private bool False(params object[] args)
         {
             return false;

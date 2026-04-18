@@ -179,5 +179,119 @@ namespace Stateless.Tests
 
             Assert.Equal(1, transitionCounter);
         }
+
+        [Fact]
+        public async Task InvokeAsync_ShouldNotCompleteUntilAsyncActionCompletes()
+        {
+            var callbackStarted = new TaskCompletionSource<int>();
+            var releaseCallback = new TaskCompletionSource<int>();
+
+            subject.Register(async _ =>
+            {
+                callbackStarted.SetResult(0);
+                await releaseCallback.Task;
+                Interlocked.Increment(ref transitionCounter);
+            });
+
+            var invokeTask = subject.InvokeAsync(new Transition(null, null, null), true);
+
+            await callbackStarted.Task;
+
+            Assert.False(invokeTask.IsCompleted);
+            Assert.Equal(0, transitionCounter);
+
+            releaseCallback.SetResult(0);
+            await invokeTask;
+
+            Assert.Equal(1, transitionCounter);
+        }
+
+        [Fact]
+        public async Task InvokeAsync_ShouldNotRetainSynchronizationContext_WhenRequestedFalse()
+        {
+            var previousContext = SynchronizationContext.Current;
+            var customContext = new SynchronizationContext();
+            SynchronizationContext firstCallbackContext = null;
+            SynchronizationContext secondCallbackContext = null;
+            var releaseFirst = new TaskCompletionSource<int>();
+
+            subject.Register(async _ =>
+            {
+                firstCallbackContext = SynchronizationContext.Current;
+                await releaseFirst.Task.ConfigureAwait(false);
+            });
+            subject.Register(_ =>
+            {
+                secondCallbackContext = SynchronizationContext.Current;
+                return Task.FromResult(0);
+            });
+
+            SynchronizationContext.SetSynchronizationContext(customContext);
+            var invokeTask = subject.InvokeAsync(new Transition(null, null, null), false);
+            SynchronizationContext.SetSynchronizationContext(previousContext);
+
+            releaseFirst.SetResult(0);
+            await invokeTask.ConfigureAwait(false);
+
+            Assert.Same(customContext, firstCallbackContext);
+            Assert.NotSame(customContext, secondCallbackContext);
+        }
+
+        [Fact]
+        public async Task InvokeAsync_ShouldAwaitAsyncActionsSequentially_WhenMultipleRegistered()
+        {
+            var order = new List<string>();
+            var firstStarted = new TaskCompletionSource<int>();
+            var releaseFirst = new TaskCompletionSource<int>();
+
+            subject.Register((Transition _) => order.Add("sync"));
+            subject.Register(async _ =>
+            {
+                order.Add("async1-start");
+                firstStarted.SetResult(0);
+                await releaseFirst.Task;
+                order.Add("async1-end");
+            });
+            subject.Register(_ =>
+            {
+                order.Add("async2");
+                return Task.FromResult(0);
+            });
+
+            var invokeTask = subject.InvokeAsync(new Transition(null, null, null), true);
+            await firstStarted.Task;
+
+            Assert.False(invokeTask.IsCompleted);
+            Assert.Equal(new[] { "sync", "async1-start" }, order);
+
+            releaseFirst.SetResult(0);
+            await invokeTask;
+
+            Assert.Equal(new[] { "sync", "async1-start", "async1-end", "async2" }, order);
+        }
+
+        [Fact]
+        public async Task InvokeAsync_ShouldPropagateAsyncActionExceptionAndSkipLaterAsyncActions()
+        {
+            var laterInvoked = false;
+            var expected = new InvalidOperationException("boom");
+            subject.Register(_ =>
+            {
+                var task = new TaskCompletionSource<int>();
+                task.SetException(expected);
+                return task.Task;
+            });
+            subject.Register(_ =>
+            {
+                laterInvoked = true;
+                return Task.FromResult(0);
+            });
+
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                subject.InvokeAsync(new Transition(null, null, null), true));
+
+            Assert.Equal(expected.Message, exception.Message);
+            Assert.False(laterInvoked);
+        }
     }
 }

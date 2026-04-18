@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading.Tasks;
 using Xunit;
 
 namespace Stateless.Tests
@@ -12,6 +13,33 @@ namespace Stateless.Tests
                 Trigger.X, State.C, null);
 
             Assert.Equal(Trigger.X, transitioning.Trigger);
+        }
+
+        [Fact]
+        public void ReentryTriggerBehaviourExposesDestinationAndUsesEmptyGuardWhenNull()
+        {
+            var reentry = new StateMachine<State, Trigger>.ReentryTriggerBehaviour(
+                Trigger.X, State.C, null);
+
+            Assert.Equal(Trigger.X, reentry.Trigger);
+            Assert.Equal(State.C, reentry.Destination);
+            Assert.True(reentry.GuardConditionsMet());
+            Assert.Empty(reentry.Guards);
+        }
+
+        [Fact]
+        public async Task ReentryTriggerBehaviourAsyncExposesDestinationAndEvaluatesGuard()
+        {
+            var reentry = new StateMachine<State, Trigger>.ReentryTriggerBehaviourAsync(
+                Trigger.X,
+                State.C,
+                new StateMachine<State, Trigger>.TransitionGuardAsync(args => Task.FromResult((int)args[0] == 1), "only one"));
+
+            Assert.Equal(Trigger.X, reentry.Trigger);
+            Assert.Equal(State.C, reentry.Destination);
+            Assert.True(await reentry.GuardConditionsMet(1));
+            Assert.False(await reentry.GuardConditionsMet(2));
+            Assert.Equal(new[] { "only one" }, await reentry.UnmetGuardConditions(new object[] { 2 }));
         }
 
         protected bool False(params object[] args)

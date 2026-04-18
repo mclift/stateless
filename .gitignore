@@ -8,5 +8,7 @@ Stateless.userprefs
 
 project.lock.json
 artifacts/
+.dotnet/
+**/TestResults/
 TestResult.xml
 *.orig

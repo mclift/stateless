@@ -30,6 +30,15 @@ namespace Stateless.Tests
         }
 
         [Fact]
+        public void NullArgsAreRejected()
+        {
+            var twp = new StateMachine<State, Trigger>.TriggerWithParameters<string>(Trigger.X);
+            var exception = Assert.Throws<ArgumentNullException>(() => twp.ValidateParameters(null));
+
+            Assert.Equal("args", exception.ParamName);
+        }
+
+        [Fact]
         public void IncompatibleParametersAreNotValid()
         {
             var twp = new StateMachine<State, Trigger>.TriggerWithParameters<string>(Trigger.X);

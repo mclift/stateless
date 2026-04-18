@@ -47,6 +47,15 @@ namespace Stateless.Tests
         }
 
         [Fact]
+        public void Unpack_ShouldReturnArg_WhenTypeIsAssignableFromArgType()
+        {
+            var value = "hello";
+
+            Assert.Same(value, ParameterConversion.Unpack(new object[] { value }, typeof(object), 0));
+            Assert.Same(value, ParameterConversion.Unpack(new object[] { value }, typeof(IComparable), 0));
+        }
+
+        [Fact]
         public void Unpack_ShouldReturnDefault_When2ParameterMethodCalled()
         {
             Assert.Equal(0, ParameterConversion.Unpack<int>(Array.Empty<object>(), 0));
@@ -58,6 +67,32 @@ namespace Stateless.Tests
         public void Validate_ShouldThrowArgumentException_WhenArgsGreaterThanExpected()
         {
             Assert.Throws<ArgumentException>(() => ParameterConversion.Validate(args, new Type[] { null, null }));
+        }
+
+        [Fact]
+        public void Validate_ShouldThrowArgumentException_WhenNoParametersExpectedButArgsProvided()
+        {
+            Assert.Throws<ArgumentException>(() => ParameterConversion.Validate(new object[] { "extra" }, Type.EmptyTypes));
+        }
+
+        [Fact]
+        public void Validate_ShouldWorkWithoutException_WhenNoParametersExpectedAndNoArgsProvided()
+        {
+            ParameterConversion.Validate(Array.Empty<object>(), Type.EmptyTypes);
+        }
+
+        [Fact]
+        public void Validate_ShouldThrowArgumentException_WhenExpectedParameterMissing()
+        {
+            Assert.Throws<ArgumentException>(() =>
+                ParameterConversion.Validate(new object[] { 5 }, new Type[] { typeof(int), typeof(string) }));
+        }
+
+        [Fact]
+        public void Validate_ShouldThrowArgumentException_WhenArgumentTypeDoesNotMatchExpected()
+        {
+            Assert.Throws<ArgumentException>(() =>
+                ParameterConversion.Validate(new object[] { "wrong" }, new Type[] { typeof(int) }));
         }
 
         [Fact]
